@@ -60,6 +60,11 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function normalizeDateInput(value: string): string {
+  const match = value.match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] ?? todayIso();
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [data, setData] = useState<WorkshopData>(loadInitialData);
@@ -520,9 +525,10 @@ function InvoicesPanel({
     return <div className="panel">Create a job card to generate an invoice.</div>;
   }
 
-  const customer = findCustomer(data, selectedInvoice.customerId);
-  const vehicle = findVehicle(data, selectedInvoice.vehicleId);
-  const totals = calculateInvoiceTotals(selectedInvoice, data.settings.vatRate);
+  const invoice = selectedInvoice;
+  const customer = findCustomer(data, invoice.customerId);
+  const vehicle = findVehicle(data, invoice.vehicleId);
+  const totals = calculateInvoiceTotals(invoice, data.settings.vatRate);
 
   function recordPayment() {
     const amount = Number(payment);
@@ -533,7 +539,7 @@ function InvoicesPanel({
     setData((current) => ({
       ...current,
       jobs: current.jobs.map((job) => (
-        job.id === selectedInvoice.id
+        job.id === invoice.id
           ? { ...job, paidAmount: job.paidAmount + amount, status: job.status === "Ready" ? "Invoiced" : job.status }
           : job
       ))
@@ -562,8 +568,8 @@ function InvoicesPanel({
           </div>
           <div>
             <strong>Tax Invoice</strong>
-            <span>{selectedInvoice.jobNumber}</span>
-            <span>{selectedInvoice.openedAt}</span>
+            <span>{invoice.jobNumber}</span>
+            <span>{invoice.openedAt}</span>
           </div>
         </div>
         <div className="invoice-customer">
@@ -587,7 +593,7 @@ function InvoicesPanel({
             <span>Unit</span>
             <span>Total</span>
           </div>
-          {selectedInvoice.lines.map((line) => (
+          {invoice.lines.map((line) => (
             <div className="table-row" key={line.id}>
               <span>{line.itemName}<small>{line.type}</small></span>
               <span>{line.quantity}</span>
@@ -710,7 +716,7 @@ function AppointmentsPanel({ data, setData }: { data: WorkshopData; setData: (up
       appointments: [
         {
           id: createId("apt"),
-          date: draft.date,
+          date: normalizeDateInput(draft.date),
           time: draft.time,
           customerId: draft.customerId,
           vehicleId: draft.vehicleId,
@@ -762,7 +768,7 @@ function AppointmentsPanel({ data, setData }: { data: WorkshopData; setData: (up
           <h2>Calendar</h2>
           <span>Offline reminders list</span>
         </div>
-        <div className="table">
+        <div className="table appointments-table">
           <div className="table-row table-head">
             <span>Date</span>
             <span>Customer / vehicle</span>
@@ -771,7 +777,7 @@ function AppointmentsPanel({ data, setData }: { data: WorkshopData; setData: (up
           </div>
           {data.appointments.map((appointment) => (
             <div className="table-row" key={appointment.id}>
-              <span>{appointment.date}<small>{appointment.time}</small></span>
+              <span>{normalizeDateInput(appointment.date)}<small>{appointment.time}</small></span>
               <span>{getCustomerVehicleLabel(data, appointment)}</span>
               <span>{appointment.service}</span>
               <span>
