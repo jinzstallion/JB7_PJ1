@@ -70,10 +70,51 @@ function App() {
   const [data, setData] = useState<WorkshopData>(loadInitialData);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>(() => data.jobs[0]?.id ?? "");
   const [importMessage, setImportMessage] = useState("");
+  // On the desktop the SQLite database is the source of truth. We must finish
+  // loading it before persisting, otherwise the seeded initial state would
+  // overwrite the saved database on startup.
+  const [hydrated, setHydrated] = useState(() => !window.desktopDB);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    const desktopDB = window.desktopDB;
+    if (!desktopDB) {
+      return;
+    }
+
+    let active = true;
+    desktopDB
+      .load()
+      .then((stored) => {
+        if (!active) {
+          return;
+        }
+        if (stored && isWorkshopData(stored)) {
+          setData(stored);
+          setSelectedInvoiceId(stored.jobs[0]?.id ?? "");
+        }
+        setHydrated(true);
+      })
+      .catch(() => {
+        if (active) {
+          setHydrated(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    if (window.desktopDB) {
+      void window.desktopDB.save(data);
+    } else {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  }, [data, hydrated]);
 
   const today = todayIso();
   const stats = useMemo(() => getDashboardStats(data, today), [data, today]);

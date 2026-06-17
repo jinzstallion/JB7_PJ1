@@ -1,5 +1,15 @@
-const { app, BrowserWindow, Menu, shell } = require("electron");
+const { app, BrowserWindow, Menu, shell, ipcMain } = require("electron");
 const path = require("node:path");
+const workshopDb = require("./db.cjs");
+
+function registerDbHandlers() {
+  ipcMain.handle("workshop-db:load", () => workshopDb.load());
+  ipcMain.handle("workshop-db:save", (_event, data) => {
+    workshopDb.save(data);
+    return true;
+  });
+  ipcMain.handle("workshop-db:path", () => workshopDb.getPath());
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -11,7 +21,8 @@ function createWindow() {
     backgroundColor: "#07111f",
     webPreferences: {
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs")
     }
   });
 
@@ -29,7 +40,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await workshopDb.init(app.getPath("userData"));
+  registerDbHandlers();
+
   Menu.setApplicationMenu(null);
   createWindow();
 
