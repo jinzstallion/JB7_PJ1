@@ -3,7 +3,13 @@
 ## Cursor Cloud specific instructions
 
 ### What this project is
-JB7 UAE Auto Workshop is an offline-first **frontend-only** desktop/web app. There is **no backend, database, or external service** and **no secrets/auth** are required. State is persisted in browser/Electron `localStorage` under the key `jb7-uae-workshop-offline-v1`. Stack: Vite + React 19 + TypeScript, with an Electron wrapper for desktop packaging.
+JB7 UAE Auto Workshop is an offline-first desktop/web app with **no remote backend or external service** and **no secrets/auth**. Stack: Vite + React 19 + TypeScript, with an Electron wrapper for desktop packaging.
+
+### Persistence (two backends)
+The renderer treats the whole `WorkshopData` object as one document and detects its environment at runtime:
+- **Desktop (Electron):** a local **SQLite** database file at `<userData>/jb7-uae-workshop.sqlite`, accessed via `window.desktopDB` (preload IPC). SQLite logic lives in `electron/sqliteStore.cjs` (shared with tests) and is loaded/flushed by `electron/db.cjs`. The engine is **sql.js (WASM)** — chosen over native modules like `better-sqlite3` so the app cross-builds for Windows from Linux with no native compilation.
+- **Browser (Vite dev):** falls back to `localStorage` key `jb7-uae-workshop-offline-v1`.
+- The renderer hydrates from the desktop DB before its first save (`hydrated` guard in `src/App.tsx`); do not remove that guard or startup will overwrite the DB with seed data.
 
 ### Services and commands
 There is a single service (the Vite app). Standard commands are defined in `package.json` scripts and `README.md`; use those rather than duplicating here:
@@ -12,7 +18,12 @@ There is a single service (the Vite app). Standard commands are defined in `pack
 - Lint/typecheck + build: `npm run build` runs `tsc --noEmit` (the project has no ESLint config, so `tsc --noEmit` is the type/lint gate) followed by `vite build`.
 - Desktop dev: `npm run desktop:dev` runs Vite + Electron together.
 
+### Building the standalone Windows exe
+- `npm run desktop:build:win` builds the **NSIS installer**; the electron-builder config also defines a **portable** single-file target. Output goes to `release/` (git-ignored).
+- Building Windows targets on Linux downloads the win32 Electron binaries (needs network). The **portable** target builds with no extra system deps: `npx electron-builder --win portable --x64`.
+- The **NSIS installer** target additionally requires `wine` on the PATH (system dependency; install separately, e.g. `apt-get install -y wine`). Without wine the installer step fails with `spawn wine ENOENT` while the portable target still succeeds.
+- The sql.js `.wasm` is bundled via `asarUnpack`; `electron/db.cjs` reads it with `fs.readFileSync(require.resolve(...))`, which works inside the asar.
+
 ### Non-obvious caveats
-- **Electron GUI does not run in this headless cloud VM.** Do dev/manual testing against the Vite dev server in a browser (`http://127.0.0.1:5173/`); do not rely on `npm run desktop:dev` / `electron` launching a window here.
-- `npm run desktop:build:win` (Windows NSIS installer) only works on a Windows build machine; it is not runnable in this environment.
-- Because data lives in browser `localStorage`, manual test state persists across reloads in the same browser profile. Use the in-app "Reset demo data" / backup import-export controls (Settings) to reset state if needed.
+- **Electron GUI does not open a visible window in this headless VM**, but you can run/verify it headlessly: `xvfb-run -a node_modules/.bin/electron . --no-sandbox --disable-gpu --user-data-dir=/tmp/jb7data`. Useful for confirming the SQLite file is created/persisted. For UI testing prefer the Vite dev server in a browser (`http://127.0.0.1:5173/`).
+- Desktop state lives in the SQLite file under `--user-data-dir` (or the OS userData path); delete that file or use the in-app "Restore demo data" / backup controls to reset.
