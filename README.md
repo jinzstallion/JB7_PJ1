@@ -43,4 +43,16 @@ npm run desktop:build:win
 
 ## Offline data
 
-The app stores workshop records in local browser/Electron storage under `jb7-uae-workshop-offline-v1`. Use **Export backup** before reinstalling or moving devices.
+On the desktop the app stores all workshop records in a **local SQLite database** file (`jb7-uae-workshop.sqlite`) in the app's user-data directory — no cloud, login, or internet required. When run in a plain browser it falls back to local browser storage under `jb7-uae-workshop-offline-v1`. Use **Export backup** before reinstalling or moving devices.
+
+## Standalone Windows executable
+
+```bash
+# Single-file portable .exe (no installer, no system deps beyond network)
+npx electron-builder --win portable --x64
+
+# NSIS installer (requires `wine` when building on Linux)
+npm run desktop:build:win
+```
+
+Artifacts are written to `release/`.
